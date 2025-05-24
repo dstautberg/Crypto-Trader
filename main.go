@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -45,7 +45,7 @@ func getBTCPrice(ticker string) (float64, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return 0, err
 	}
@@ -75,7 +75,7 @@ func getKrakenHistoricalPrices(pair string, interval int) ([]float64, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func getBTCPriceAtDatetime(pair string, interval int, target time.Time) (float64
 		return 0, err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return 0, err
 	}
@@ -191,7 +191,9 @@ func main() {
 	for {
 		price, err := getBTCPrice(ticker)
 		if err != nil {
-			panic(err)
+			fmt.Println("Error fetching price:", err)
+			time.Sleep(time.Duration(sleepSeconds) * time.Second)
+			continue
 		}
 		// price = 116438.805 // Uncomment this line to test with a fixed price
 
