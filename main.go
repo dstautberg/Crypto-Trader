@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-
 	"golang.org/x/text/message"
 
 	_ "modernc.org/sqlite"
@@ -66,90 +65,7 @@ func getBTCPrice(ticker string) (float64, error) {
 	return 0, fmt.Errorf("price not found in response: %s", string(body))
 }
 
-// Get historical prices from Kraken
-func getKrakenHistoricalPrices(pair string, interval int) ([]float64, error) {
-	url := fmt.Sprintf("https://api.kraken.com/0/public/OHLC?pair=%s&interval=%d", pair, interval)
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var result struct {
-		Result map[string]interface{} `json:"result"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, err
-	}
-
-	var prices []float64
-	for k, v := range result.Result {
-		if k == "last" {
-			continue
-		}
-		if ohlcArr, ok := v.([]interface{}); ok {
-			for _, entry := range ohlcArr {
-				if entryArr, ok := entry.([]interface{}); ok && len(entryArr) > 4 {
-					if closeStr, ok := entryArr[4].(string); ok {
-						if close, err := strconv.ParseFloat(closeStr, 64); err == nil {
-							prices = append(prices, close)
-						}
-					}
-				}
-			}
-		}
-	}
-	return prices, nil
-}
-
-// Get historical price for BTC at a specific date and time (UTC)
-func getBTCPriceAtDatetime(pair string, interval int, target time.Time) (float64, error) {
-	// Fetch OHLC data from Kraken for the given pair and interval
-	url := fmt.Sprintf("https://api.kraken.com/0/public/OHLC?pair=%s&interval=%d", pair, interval)
-	resp, err := http.Get(url)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, err
-	}
-	var result struct {
-		Result map[string]interface{} `json:"result"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return 0, err
-	}
-	for k, v := range result.Result {
-		if k == "last" {
-			continue
-		}
-		if ohlcArr, ok := v.([]interface{}); ok {
-			for _, entry := range ohlcArr {
-				if entryArr, ok := entry.([]interface{}); ok && len(entryArr) > 4 {
-					ts, ok1 := entryArr[0].(float64)
-					closeStr, ok2 := entryArr[4].(string)
-					if ok1 && ok2 {
-						candleTime := time.Unix(int64(ts), 0).UTC()
-						if candleTime.Equal(target) || (candleTime.Before(target) && candleTime.Add(time.Duration(interval)*time.Minute).After(target)) {
-							if close, err := strconv.ParseFloat(closeStr, 64); err == nil {
-								return close, nil
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return 0, fmt.Errorf("no price found for %s at %s", pair, target.Format(time.RFC3339))
-}
-
+// In main(), add a CLI flag to show the chart and exit
 func main() {
 	// Load .env file if present
 	_ = godotenv.Load()
@@ -256,14 +172,87 @@ func main() {
 			)
 		}
 
-		// Example: Get BTC price at May 22, 2025, 20:35 UTC
-		if false { // Set to true to run the example
-			targetTime := time.Date(2025, 5, 22, 20, 35, 0, 0, time.UTC)
-			price, err := getBTCPriceAtDatetime("XXBTZUSD", 1, targetTime)
-			if err != nil {
-				fmt.Println("Error getting historical price:", err)
-			} else {
-				fmt.Printf("BTC price at %s was $%0.2f\n", targetTime.Format(time.RFC3339), price)
+		// Inline chart display after price output
+		// Query prices and timestamps for the last 24 hours
+		rows, err := db.Query(`SELECT price, timestamp FROM btc_price WHERE timestamp >= datetime('now', '-1 day') ORDER BY timestamp`)
+		if err == nil {
+			defer rows.Close()
+			var prices []float64
+			for rows.Next() {
+				var p float64
+				var t string
+				if err := rows.Scan(&p, &t); err == nil {
+					prices = append(prices, p)
+				}
+			}
+			if len(prices) > 0 {
+				min, max := prices[0], prices[0]
+				high, low := prices[0], prices[0]
+				for _, p := range prices {
+					if p < min {
+						min = p
+					}
+					if p > max {
+						max = p
+					}
+					if p < low {
+						low = p
+					}
+					if p > high {
+						high = p
+					}
+				}
+				chartWidth := 80
+				chartHeight := 10
+				step := 1
+				if len(prices) > chartWidth {
+					step = len(prices) / chartWidth
+				}
+				chartData := make([]float64, 0, chartWidth)
+				for i := 0; i < len(prices); i += step {
+					chartData = append(chartData, prices[i])
+				}
+				ma := make([]float64, len(prices))
+				window := 24 * 60 / step
+				if window < 1 {
+					window = 1
+				}
+				for i := range prices {
+					start := i - window + 1
+					if start < 0 {
+						start = 0
+					}
+					sum := 0.0
+					for j := start; j <= i; j++ {
+						sum += prices[j]
+					}
+					ma[i] = sum / float64(i-start+1)
+				}
+				maChartData := make([]float64, 0, chartWidth)
+				for i := 0; i < len(ma); i += step {
+					maChartData = append(maChartData, ma[i])
+				}
+				// Print chart to console
+				for y := chartHeight - 1; y >= 0; y-- {
+					for x := 0; x < len(chartData); x++ {
+						priceNorm := (chartData[x] - min) / (max - min)
+						priceLevel := int(priceNorm * float64(chartHeight-1))
+						maNorm := (maChartData[x] - min) / (max - min)
+						maLevel := int(maNorm * float64(chartHeight-1))
+						if priceLevel == y && maLevel == y {
+							fmt.Print("\x1b[33m◦\x1b[0m") // yellow
+						} else if priceLevel == y {
+							fmt.Print("\x1b[37m◦\x1b[0m") // white
+						} else if maLevel == y {
+							fmt.Print("\x1b[32m◦\x1b[0m") // green
+						} else {
+							fmt.Print(" ")
+						}
+					}
+					fmt.Println()
+				}
+				fmt.Printf("High: %.2f  Low: %.2f\n", high, low)
+				fmt.Println("\x1b[37m◦\x1b[0m Price  \x1b[32m◦\x1b[0m 24h MA  \x1b[33m◦\x1b[0m Both\n")
 			}
 		}
 
