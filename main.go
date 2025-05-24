@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -144,16 +145,6 @@ func main() {
 			beep()
 		}
 
-		p := message.NewPrinter(message.MatchLanguage("en"))
-		p.Printf("[%s] %s: $%0.2f, 24h avg $%0.2f, diff %.2f%% %s\n",
-			currentTime,
-			ticker,
-			price,
-			avg24h.Float64,
-			percentChange,
-			recommend,
-		)
-
 		prevBuyAmount, _ := strconv.ParseFloat(os.Getenv("PREVIOUS_BUY_AMOUNT"), 64)
 		prevBuyPrice, _ := strconv.ParseFloat(os.Getenv("PREVIOUS_BUY_PRICE"), 64)
 		transactionFeePct, _ := strconv.ParseFloat(os.Getenv("TRANSACTION_FEE_PCT"), 64)
@@ -162,6 +153,17 @@ func main() {
 		transactionFeeUSD := prevValueUSD * (transactionFeePct / 100)
 		newValueUSD := (prevBuyAmount * price) - transactionFeeUSD
 		profitUSD := newValueUSD - prevValueUSD
+
+		p := message.NewPrinter(message.MatchLanguage("en"))
+		p.Println(strings.Repeat("-", 100))
+		p.Printf("%s - %s $%0.2f, 24h avg $%0.2f, diff %.2f%% %s\n",
+			currentTime,
+			ticker,
+			price,
+			avg24h.Float64,
+			percentChange,
+			recommend,
+		)
 		if recommend == "** SELL **" {
 			p.Printf("Amount %.10f, Buy Value: $%.4f, Transaction Fee: $%.4f, Sell Value: $%.4f, Profit: $%f\n",
 				prevBuyAmount,
@@ -171,6 +173,7 @@ func main() {
 				profitUSD,
 			)
 		}
+		fmt.Printf("Price: \x1b[37m◦\x1b[0m 24h MA: \x1b[32m◦\x1b[0m Both: \x1b[33m◦\x1b[0m")
 
 		// Inline chart display after price output
 		// Query prices and timestamps for the last 24 hours
@@ -233,6 +236,7 @@ func main() {
 					maChartData = append(maChartData, ma[i])
 				}
 				// Print chart to console
+				// circle := "\u25CF"
 				for y := chartHeight - 1; y >= 0; y-- {
 					for x := 0; x < len(chartData); x++ {
 						priceNorm := (chartData[x] - min) / (max - min)
@@ -240,19 +244,18 @@ func main() {
 						maNorm := (maChartData[x] - min) / (max - min)
 						maLevel := int(maNorm * float64(chartHeight-1))
 						if priceLevel == y && maLevel == y {
-							fmt.Print("\x1b[33m◦\x1b[0m") // yellow
+							p.Printf("\x1b[33m\u25CF\x1b[0m") // yellow
 						} else if priceLevel == y {
-							fmt.Print("\x1b[37m◦\x1b[0m") // white
+							p.Print("\x1b[37m\u25CF\x1b[0m") // white
 						} else if maLevel == y {
-							fmt.Print("\x1b[32m◦\x1b[0m") // green
+							p.Print("\x1b[32m\u25CF\x1b[0m") // green
 						} else {
-							fmt.Print(" ")
+							p.Print(" ")
 						}
 					}
 					fmt.Println()
 				}
-				fmt.Printf("High: %.2f  Low: %.2f\n", high, low)
-				fmt.Println("\x1b[37m◦\x1b[0m Price  \x1b[32m◦\x1b[0m 24h MA  \x1b[33m◦\x1b[0m Both\n")
+				p.Printf("\n")
 			}
 		}
 
