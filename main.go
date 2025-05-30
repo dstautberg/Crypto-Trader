@@ -66,7 +66,6 @@ func getBTCPrice(ticker string) (float64, error) {
 	return 0, fmt.Errorf("price not found in response: %s", string(body))
 }
 
-// In main(), add a CLI flag to show the chart and exit
 func main() {
 	// Load .env file if present
 	_ = godotenv.Load()
@@ -155,7 +154,8 @@ func main() {
 		profitUSD := newValueUSD - prevValueUSD
 
 		p := message.NewPrinter(message.MatchLanguage("en"))
-		p.Println(strings.Repeat("-", 100))
+		line := "\u2500"
+		p.Println(strings.Repeat(line, 105))
 		p.Printf("%s - %s $%0.2f, 24h avg $%0.2f, diff %.2f%% %s\n",
 			currentTime,
 			ticker,
@@ -173,7 +173,26 @@ func main() {
 				profitUSD,
 			)
 		}
-		fmt.Printf("Price: \x1b[37m◦\x1b[0m 24h MA: \x1b[32m◦\x1b[0m Both: \x1b[33m◦\x1b[0m")
+		p.Println(strings.Repeat(line, 105))
+
+		// Common Unicode circle types:
+		// Small Circle:      ◦ (U+25E6)  \u25E6
+		// Medium Circle:     ○ (U+25CB)  \u25CB
+		// Large Circle:      ● (U+25CF)  \u25CF
+		// White Circle:      ◯ (U+25EF)  \u25EF
+		// Black Circle:      ● (U+25CF)  \u25CF
+		// Dotted Circle:     ◌ (U+25CC)  \u25CC
+		// Bullseye/Fisheye:  ◉ (U+25C9)  \u25C9
+		// Circle Vert Fill:  ◍ (U+25CD)  \u25CD
+		// "Bullet" • (U+2022) — a small filled circle, commonly used for lists.
+		// "Black Small Circle" ● (U+25CF) — but this is the same as the large filled circle.
+		// "One Dot Leader" ․ (U+2024) — very small, but not visually circular in all fonts.
+		// "Middle Dot" · (U+00B7) — a small centered dot, but not a perfect circle.
+		// You can use these as needed for chart points.
+		circle := "\u2022"
+		fmt.Printf("Price: \x1b[37m%s\x1b[0m 24h MA: \x1b[32m%s\x1b[0m Both: \x1b[33m%s\x1b[0m",
+			circle, line, circle,
+		)
 
 		// Inline chart display after price output
 		// Query prices and timestamps for the last 24 hours
@@ -205,8 +224,8 @@ func main() {
 						high = p
 					}
 				}
-				chartWidth := 80
-				chartHeight := 10
+				chartWidth := 100
+				chartHeight := 20
 				step := 1
 				if len(prices) > chartWidth {
 					step = len(prices) / chartWidth
@@ -236,7 +255,6 @@ func main() {
 					maChartData = append(maChartData, ma[i])
 				}
 				// Print chart to console
-				// circle := "\u25CF"
 				for y := chartHeight - 1; y >= 0; y-- {
 					for x := 0; x < len(chartData); x++ {
 						priceNorm := (chartData[x] - min) / (max - min)
@@ -244,11 +262,11 @@ func main() {
 						maNorm := (maChartData[x] - min) / (max - min)
 						maLevel := int(maNorm * float64(chartHeight-1))
 						if priceLevel == y && maLevel == y {
-							p.Printf("\x1b[33m\u25CF\x1b[0m") // yellow
+							p.Printf("\x1b[33m%s\x1b[0m", circle) // yellow
 						} else if priceLevel == y {
-							p.Print("\x1b[37m\u25CF\x1b[0m") // white
+							p.Printf("\x1b[37m%s\x1b[0m", circle) // white
 						} else if maLevel == y {
-							p.Print("\x1b[32m\u25CF\x1b[0m") // green
+							p.Printf("\x1b[32m%s\x1b[0m", line) // green
 						} else {
 							p.Print(" ")
 						}
@@ -258,6 +276,7 @@ func main() {
 				p.Printf("\n")
 			}
 		}
+		p.Println(strings.Repeat(line, 105), "\n")
 
 		time.Sleep(time.Duration(sleepSeconds) * time.Second)
 	}
