@@ -104,6 +104,14 @@ func main() {
 		panic(err)
 	}
 
+	// Read moving average days from .env
+	movingAvgDays := 1 // default to 1 day
+	if val := os.Getenv("MOVING_AVG_DAYS"); val != "" {
+		if n, err := strconv.Atoi(val); err == nil && n > 0 {
+			movingAvgDays = n
+		}
+	}
+
 	for {
 		price, err := getBTCPrice(ticker)
 		if err != nil {
@@ -125,14 +133,15 @@ func main() {
 		}
 		currentTime := time.Now().In(loc).Format("2006-01-02 15:04:05 MST")
 
-		// Calculate and display the moving average for the last 24 hours
-		row := db.QueryRow(`SELECT AVG(price) FROM btc_price WHERE timestamp >= datetime('now', '-1 day')`)
-		var avg24h sql.NullFloat64
-		if err := row.Scan(&avg24h); err != nil {
+		// Calculate and display the moving average for the last N days
+		query := fmt.Sprintf(`SELECT AVG(price) FROM btc_price WHERE timestamp >= datetime('now', '-%d day')`, movingAvgDays)
+		row := db.QueryRow(query)
+		var avgNDays sql.NullFloat64
+		if err := row.Scan(&avgNDays); err != nil {
 			panic(err)
 		}
 
-		percentChange := ((price - avg24h.Float64) / avg24h.Float64) * 100
+		percentChange := ((price - avgNDays.Float64) / avgNDays.Float64) * 100
 		recommend := ""
 		if percentChange > changeThreshold {
 			recommend = "** SELL **"
@@ -156,11 +165,12 @@ func main() {
 		p := message.NewPrinter(message.MatchLanguage("en"))
 		line := "\u2500"
 		p.Println(strings.Repeat(line, 105))
-		p.Printf("%s - %s $%0.2f, 24h avg $%0.2f, diff %.2f%% %s\n",
+		p.Printf("%s - %s $%0.2f, %dd avg $%0.2f, diff %.2f%% %s\n",
 			currentTime,
 			ticker,
 			price,
-			avg24h.Float64,
+			movingAvgDays,
+			avgNDays.Float64,
 			percentChange,
 			recommend,
 		)
@@ -195,8 +205,9 @@ func main() {
 		)
 
 		// Inline chart display after price output
-		// Query prices and timestamps for the last 24 hours
-		rows, err := db.Query(`SELECT price, timestamp FROM btc_price WHERE timestamp >= datetime('now', '-1 day') ORDER BY timestamp`)
+		// Query prices and timestamps for the last N days (matching moving average)
+		queryChart := fmt.Sprintf(`SELECT price, timestamp FROM btc_price WHERE timestamp >= datetime('now', '-%d day') ORDER BY timestamp`, movingAvgDays)
+		rows, err := db.Query(queryChart)
 		if err == nil {
 			defer rows.Close()
 			var prices []float64
