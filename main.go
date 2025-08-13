@@ -200,8 +200,8 @@ func main() {
 		// "Middle Dot" · (U+00B7) — a small centered dot, but not a perfect circle.
 		// You can use these as needed for chart points.
 		circle := "\u2022"
-		fmt.Printf("Price: \x1b[37m%s\x1b[0m 24h MA: \x1b[32m%s\x1b[0m Both: \x1b[33m%s\x1b[0m",
-			circle, line, circle,
+		fmt.Printf("Price: \x1b[37m%s\x1b[0m %dd MA: \x1b[32m%s\x1b[0m Both: \x1b[33m%s\x1b[0m",
+			circle, movingAvgDays, circle, circle,
 		)
 
 		// Inline chart display after price output
