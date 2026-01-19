@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crypto Trader</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -14,37 +15,77 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
             padding: 20px;
         }
         .container {
             background: white;
             border-radius: 20px;
-            padding: 60px 40px;
+            padding: 40px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            text-align: center;
-            max-width: 600px;
-            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
         }
         h1 {
-            font-size: 3em;
+            font-size: 2.5em;
             color: #333;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            text-align: center;
         }
-        p {
+        .subtitle {
             color: #666;
-            font-size: 1.2em;
+            font-size: 1.1em;
             margin-bottom: 30px;
+            text-align: center;
         }
         .crypto-icon {
-            font-size: 4em;
-            margin-bottom: 20px;
+            font-size: 3em;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .stat-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            flex: 1;
+            min-width: 200px;
+            text-align: center;
+        }
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-top: 20px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .last-update {
+            text-align: center;
+            color: #999;
+            font-size: 0.9em;
+            margin-top: 10px;
         }
     </style>
 </head>
@@ -52,7 +93,158 @@
     <div class="container">
         <div class="crypto-icon">₿</div>
         <h1>Crypto Trader</h1>
-        <p>Welcome to your cryptocurrency trading platform</p>
+        <p class="subtitle">Real-time cryptocurrency price tracking</p>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-label">Current Price</div>
+                <div class="stat-value" id="currentPrice">--</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">24h Moving Average</div>
+                <div class="stat-value" id="movingAvg">--</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Change</div>
+                <div class="stat-value" id="change">--</div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <canvas id="priceChart"></canvas>
+        </div>
+        
+        <div class="last-update" id="lastUpdate">Loading...</div>
     </div>
+
+    <script>
+        let chart;
+        let lastTimestamp = null;
+
+        // Initialize chart
+        const ctx = document.getElementById('priceChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Price',
+                        data: [],
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 4
+                    },
+                    {
+                        label: 'Moving Average',
+                        data: [],
+                        borderColor: '#764ba2',
+                        backgroundColor: 'rgba(118, 75, 162, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': $' + context.parsed.y.toFixed(2);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value.toLocaleString();
+                            }
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxTicksLimit: 12
+                        }
+                    }
+                }
+            }
+        });
+
+        // Load initial data
+        async function loadPrices() {
+            try {
+                const response = await fetch('/api/prices?days=1');
+                const data = await response.json();
+                
+                if (data.prices && data.prices.length > 0) {
+                    const labels = data.prices.map(p => {
+                        const date = new Date(p.timestamp);
+                        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    });
+                    const prices = data.prices.map(p => p.price);
+                    const movingAvg = data.movingAvg || [];
+                    
+                    chart.data.labels = labels;
+                    chart.data.datasets[0].data = prices;
+                    chart.data.datasets[1].data = movingAvg;
+                    chart.update('none');
+                    
+                    // Update stats
+                    const currentPrice = prices[prices.length - 1];
+                    const avgPrice = movingAvg[movingAvg.length - 1];
+                    const change = ((currentPrice - avgPrice) / avgPrice * 100).toFixed(2);
+                    
+                    document.getElementById('currentPrice').textContent = '$' + currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    document.getElementById('movingAvg').textContent = '$' + avgPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    document.getElementById('change').textContent = (change >= 0 ? '+' : '') + change + '%';
+                    
+                    lastTimestamp = data.prices[data.prices.length - 1].timestamp;
+                    document.getElementById('lastUpdate').textContent = 'Last update: ' + new Date(lastTimestamp).toLocaleString();
+                }
+            } catch (error) {
+                console.error('Error loading prices:', error);
+                document.getElementById('lastUpdate').textContent = 'Error loading data';
+            }
+        }
+
+        // Check for new data
+        async function checkForUpdates() {
+            try {
+                const response = await fetch('/api/latest');
+                const data = await response.json();
+                
+                if (data.timestamp && data.timestamp !== lastTimestamp) {
+                    // New data available, reload all prices
+                    await loadPrices();
+                }
+            } catch (error) {
+                console.error('Error checking for updates:', error);
+            }
+        }
+
+        // Load initial data
+        loadPrices();
+
+        // Check for updates every 10 seconds
+        setInterval(checkForUpdates, 10000);
+    </script>
 </body>
 </html>
