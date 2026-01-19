@@ -2,9 +2,7 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -13,60 +11,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"golang.org/x/text/message"
 
 	_ "modernc.org/sqlite"
 )
 
-// Struct for Kraken API response
-type KrakenTickerResponse struct {
-	Result map[string]struct {
-		C []string `json:"c"`
-	} `json:"result"`
-}
-
-func getBTCPrice(ticker string) (float64, error) {
-	// Kraken expects XBT for BTC, ETH for Ethereum, etc. Map common names to Kraken codes.
-	tickerMap := map[string]string{
-		"BTC": "XBT",
-		"ETH": "ETH",
-		"LTC": "LTC",
-		// Add more mappings as needed
-	}
-	krakenTicker := ticker
-	if val, ok := tickerMap[ticker]; ok {
-		krakenTicker = val
-	}
-	url := fmt.Sprintf("https://api.kraken.com/0/public/Ticker?pair=X%sZUSD", krakenTicker)
-	resp, err := http.Get(url)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, err
-	}
-
-	var tickerResp KrakenTickerResponse
-	err = json.Unmarshal(body, &tickerResp)
-	if err != nil {
-		return 0, err
-	}
-
-	for _, v := range tickerResp.Result {
-		if len(v.C) > 0 {
-			var price float64
-			fmt.Sscanf(v.C[0], "%f", &price)
-			return price, nil
-		}
-	}
-	return 0, fmt.Errorf("price not found in response: %s", string(body))
-}
-
 func main() {
+	// Check if web server mode is requested
+	if len(os.Args) > 1 && os.Args[1] == "web" {
+		webServer()
+		return
+	}
+
 	// Load .env file if present
 	_ = godotenv.Load()
 
@@ -299,4 +257,24 @@ func beep() {
 	} else {
 		exec.Command("beep").Run()
 	}
+}
+
+func webServer() {
+	// Set Gin to release mode for production
+	gin.SetMode(gin.ReleaseMode)
+
+	// Create a new Gin router
+	router := gin.Default()
+
+	// Load HTML templates
+	router.LoadHTMLGlob("templates/*")
+
+	// Define the home route
+	router.GET("/", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "index.html", nil)
+	})
+
+	// Start the server on port 8080
+	fmt.Println("Starting web server on http://localhost:8080")
+	router.Run(":8080")
 }
