@@ -48,6 +48,17 @@ func consoleMode() {
 		panic(err)
 	}
 
+	// Create settings table
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS settings (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		initial_funds REAL DEFAULT 0,
+		transaction_fee_rate REAL DEFAULT 1.0,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`)
+	if err != nil {
+		panic(err)
+	}
+
 	runPriceCollection(db, true)
 }
 
@@ -294,6 +305,17 @@ func webServer() {
 		panic(err)
 	}
 
+	// Create settings table
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS settings (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		initial_funds REAL DEFAULT 0,
+		transaction_fee_rate REAL DEFAULT 1.0,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`)
+	if err != nil {
+		panic(err)
+	}
+
 	// Start price collection in background
 	go runPriceCollection(db, false)
 
@@ -365,6 +387,55 @@ func webServer() {
 		c.JSON(http.StatusOK, gin.H{
 			"price":     price,
 			"timestamp": timestamp,
+		})
+	})
+
+	// API endpoint to get settings
+	router.GET("/api/settings", func(c *gin.Context) {
+		row := db.QueryRow(`SELECT initial_funds, transaction_fee_rate FROM settings ORDER BY id DESC LIMIT 1`)
+		var initialFunds float64
+		var transactionFeeRate float64
+		if err := row.Scan(&initialFunds, &transactionFeeRate); err != nil {
+			if err == sql.ErrNoRows {
+				// No settings yet, return defaults
+				c.JSON(http.StatusOK, gin.H{
+					"initial_funds":        0,
+					"transaction_fee_rate": 1.0,
+				})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"initial_funds":        initialFunds,
+			"transaction_fee_rate": transactionFeeRate,
+		})
+	})
+
+	// API endpoint to save settings
+	router.POST("/api/settings", func(c *gin.Context) {
+		var input struct {
+			InitialFunds       float64 `json:"initial_funds"`
+			TransactionFeeRate float64 `json:"transaction_fee_rate"`
+		}
+		if err := c.BindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Insert new settings record
+		_, err := db.Exec(`INSERT INTO settings (initial_funds, transaction_fee_rate, updated_at) VALUES (?, ?, ?)`,
+			input.InitialFunds, input.TransactionFeeRate, time.Now().UTC())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":              "Settings saved successfully",
+			"initial_funds":        input.InitialFunds,
+			"transaction_fee_rate": input.TransactionFeeRate,
 		})
 	})
 

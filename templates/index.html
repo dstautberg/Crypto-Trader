@@ -87,11 +87,113 @@
             font-size: 0.9em;
             margin-top: 10px;
         }
+        .settings-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 0;
+            margin-top: 30px;
+        }
+        .settings-toggle {
+            font-size: 1.5em;
+            color: #333;
+            padding: 20px 25px;
+            margin: 0;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            transition: background-color 0.3s;
+        }
+        .settings-toggle:hover {
+            background-color: #e9ecef;
+            border-radius: 10px;
+        }
+        .toggle-icon {
+            transition: transform 0.3s;
+            font-size: 0.8em;
+        }
+        .toggle-icon.expanded {
+            transform: rotate(180deg);
+        }
+        .settings-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .settings-content.expanded {
+            max-height: 500px;
+            padding: 0 25px 25px 25px;
+        }
+        .settings-form {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 8px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+        .message {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 600;
+            display: none;
+        }
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="crypto-icon">₿</div>
         <h1>Crypto Trader</h1>
         <p class="subtitle">Real-time cryptocurrency price tracking</p>
         
@@ -115,6 +217,25 @@
         </div>
         
         <div class="last-update" id="lastUpdate">Loading...</div>
+        
+        <!-- Settings Form -->
+        <div class="settings-section">
+            <h2 class="settings-toggle" id="settingsToggle">Trading Settings <span class="toggle-icon">▼</span></h2>
+            <div id="settingsContent" class="settings-content">
+                <form id="settingsForm" class="settings-form">
+                    <div class="form-group">
+                        <label for="initialFunds">Initial Funds ($):</label>
+                        <input type="number" id="initialFunds" name="initial_funds" step="0.01" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="transactionFeeRate">Transaction Fee Rate (%):</label>
+                        <input type="number" id="transactionFeeRate" name="transaction_fee_rate" step="0.01" min="0" max="100" value="1" required>
+                    </div>
+                    <button type="submit" class="submit-btn">Save Settings</button>
+                    <div id="settingsMessage" class="message"></div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -240,7 +361,75 @@
             }
         }
 
+        // Toggle settings section
+        document.getElementById('settingsToggle').addEventListener('click', function() {
+            const content = document.getElementById('settingsContent');
+            const icon = document.querySelector('.toggle-icon');
+            
+            content.classList.toggle('expanded');
+            icon.classList.toggle('expanded');
+        });
+
+        // Load settings on page load
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const data = await response.json();
+                
+                if (data.initial_funds !== undefined) {
+                    document.getElementById('initialFunds').value = data.initial_funds;
+                }
+                if (data.transaction_fee_rate !== undefined) {
+                    document.getElementById('transactionFeeRate').value = data.transaction_fee_rate;
+                }
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+
+        // Handle settings form submission
+        document.getElementById('settingsForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const initialFunds = parseFloat(document.getElementById('initialFunds').value);
+            const transactionFeeRate = parseFloat(document.getElementById('transactionFeeRate').value);
+            const messageDiv = document.getElementById('settingsMessage');
+            
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        initial_funds: initialFunds,
+                        transaction_fee_rate: transactionFeeRate
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    messageDiv.textContent = 'Settings saved successfully!';
+                    messageDiv.className = 'message success';
+                } else {
+                    messageDiv.textContent = 'Error: ' + (data.error || 'Failed to save settings');
+                    messageDiv.className = 'message error';
+                }
+                
+                // Hide message after 3 seconds
+                setTimeout(() => {
+                    messageDiv.style.display = 'none';
+                }, 3000);
+            } catch (error) {
+                console.error('Error saving settings:', error);
+                messageDiv.textContent = 'Error: Failed to save settings';
+                messageDiv.className = 'message error';
+            }
+        });
+
         // Load initial data
+        loadSettings();
         loadPrices();
 
         // Check for updates every 10 seconds
