@@ -104,6 +104,14 @@ func runPriceCollection(db *sql.DB, showConsoleOutput bool) {
 			panic(err)
 		}
 
+		// Call the trading algorithm to analyze the price
+		signal, err := TradingAlgorithm(db, price, movingAvgDays, changeThreshold)
+		if err != nil {
+			fmt.Println("Error running trading algorithm:", err)
+			time.Sleep(time.Duration(sleepSeconds) * time.Second)
+			continue
+		}
+
 		// Get current time for output in Eastern Time
 		loc, err := time.LoadLocation("America/New_York")
 		if err != nil {
@@ -111,21 +119,10 @@ func runPriceCollection(db *sql.DB, showConsoleOutput bool) {
 		}
 		currentTime := time.Now().In(loc).Format("2006-01-02 15:04:05 MST")
 
-		// Calculate and display the moving average for the last N days
-		query := fmt.Sprintf(`SELECT AVG(price) FROM btc_price WHERE timestamp >= datetime('now', '-%d day')`, movingAvgDays)
-		row := db.QueryRow(query)
-		var avgNDays sql.NullFloat64
-		if err := row.Scan(&avgNDays); err != nil {
-			panic(err)
-		}
-
-		percentChange := ((price - avgNDays.Float64) / avgNDays.Float64) * 100
-		recommend := ""
-		if percentChange > changeThreshold {
-			recommend = "** SELL **"
-		} else if percentChange < -changeThreshold {
-			recommend = "** BUY **"
-		}
+		// Use signal data from algorithm
+		percentChange := signal.PercentChange
+		recommend := signal.Recommendation
+		avgNDays := sql.NullFloat64{Float64: signal.MovingAverage, Valid: signal.MovingAverage > 0}
 
 		if recommend == "** SELL **" {
 			beep()
