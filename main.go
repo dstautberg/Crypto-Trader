@@ -281,6 +281,35 @@ func beep() {
 	}
 }
 
+func computeWMA(prices []float64, window int) []float64 {
+	n := len(prices)
+	if n == 0 {
+		return nil
+	}
+	if window < 1 {
+		window = 1
+	}
+	res := make([]float64, n)
+	for i := 0; i < n; i++ {
+		start := i - window + 1
+		if start < 0 {
+			start = 0
+		}
+		var weightedSum, sumWeights float64
+		for j := start; j <= i; j++ {
+			weight := float64(j-start+1)
+			weightedSum += prices[j] * weight
+			sumWeights += weight
+		}
+		if sumWeights == 0 {
+			res[i] = prices[i]
+		} else {
+			res[i] = weightedSum / sumWeights
+		}
+	}
+	return res
+}
+
 func webServer() {
 	// Set Gin to release mode for production
 	gin.SetMode(gin.ReleaseMode)
@@ -329,8 +358,13 @@ func webServer() {
 
 	// API endpoint to get historical price data
 	router.GET("/api/prices", func(c *gin.Context) {
-		days := c.DefaultQuery("days", "1")
-		query := fmt.Sprintf(`SELECT price, timestamp FROM btc_price WHERE timestamp >= datetime('now', '-%s day') ORDER BY timestamp`, days)
+		daysStr := c.DefaultQuery("days", "1")
+		daysInt, _ := strconv.Atoi(daysStr)
+		if daysInt < 1 {
+			daysInt = 1
+		}
+
+		query := fmt.Sprintf(`SELECT price, timestamp FROM btc_price WHERE timestamp >= datetime('now', '-%d day') ORDER BY timestamp`, daysInt)
 		rows, err := db.Query(query)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -344,31 +378,54 @@ func webServer() {
 		}
 
 		var prices []PricePoint
+		var rawPrices []float64
 		for rows.Next() {
 			var p PricePoint
 			if err := rows.Scan(&p.Price, &p.Timestamp); err == nil {
 				prices = append(prices, p)
+				rawPrices = append(rawPrices, p.Price)
 			}
 		}
 
-		// Calculate moving average
-		var movingAvg []float64
-		window := 24 // 24-hour moving average
-		for i := range prices {
-			start := i - window + 1
-			if start < 0 {
-				start = 0
+		// Estimate samples per day from returned data so we can compute window sizes for day-based WMAs
+		samplesPerDay := 1.0
+		if len(rawPrices) > 0 {
+			samplesPerDay = float64(len(rawPrices)) / float64(daysInt)
+			if samplesPerDay < 1.0 {
+				samplesPerDay = 1.0
 			}
-			sum := 0.0
-			for j := start; j <= i; j++ {
-				sum += prices[j].Price
-			}
-			movingAvg = append(movingAvg, sum/float64(i-start+1))
+		}
+
+		// Window sizes in samples for 7-day and 30-day WMAs
+		window7 := int(samplesPerDay * 7.0)
+		window30 := int(samplesPerDay * 30.0)
+		if window7 < 1 {
+			window7 = 1
+		}
+		if window30 < 1 {
+			window30 = 1
+		}
+		if window7 > len(rawPrices) {
+			window7 = len(rawPrices)
+		}
+		if window30 > len(rawPrices) {
+			window30 = len(rawPrices)
+		}
+
+		// Compute WMAs (arrays aligned with prices)
+		var wma7, wma30 []float64
+		if len(rawPrices) > 0 {
+			wma7 = computeWMA(rawPrices, window7)
+			wma30 = computeWMA(rawPrices, window30)
+		} else {
+			wma7 = []float64{}
+			wma30 = []float64{}
 		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"prices":    prices,
-			"movingAvg": movingAvg,
+			"wma7":      wma7,
+			"wma30":     wma30,
 		})
 	})
 

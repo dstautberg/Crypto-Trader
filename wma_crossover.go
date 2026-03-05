@@ -26,7 +26,7 @@ func calculateWMA(prices []float64, period int) float64 {
 	return weightedSum / sumWeights
 }
 
-func main() {
+func wmaCrossoverSample() {
 	symbol := "XXBTZUSD" // Kraken's pair name for BTC/USD
 	url := fmt.Sprintf("https://api.kraken.com/0/public/OHLC?pair=%s&interval=1440", symbol)
 

@@ -203,12 +203,12 @@
                 <div class="stat-value" id="currentPrice">--</div>
             </div>
             <div class="stat-box">
-                <div class="stat-label">24h Moving Average</div>
-                <div class="stat-value" id="movingAvg">--</div>
+                <div class="stat-label">7d WMA</div>
+                <div class="stat-value" id="wma7">--</div>
             </div>
             <div class="stat-box">
-                <div class="stat-label">Change</div>
-                <div class="stat-value" id="change">--</div>
+                <div class="stat-label">30d WMA</div>
+                <div class="stat-value" id="wma30">--</div>
             </div>
         </div>
         
@@ -220,7 +220,7 @@
         
         <!-- Settings Form -->
         <div class="settings-section">
-            <h2 class="settings-toggle" id="settingsToggle">Trading Settings <span class="toggle-icon">▼</span></h2>
+            <h2 class="settings-toggle" id="settingsToggle">Start Virtual Trading<span class="toggle-icon">▼</span></h2>
             <div id="settingsContent" class="settings-content">
                 <form id="settingsForm" class="settings-form">
                     <div class="form-group">
@@ -260,10 +260,20 @@
                         pointHoverRadius: 4
                     },
                     {
-                        label: 'Moving Average',
+                        label: '7d WMA',
                         data: [],
-                        borderColor: '#764ba2',
-                        backgroundColor: 'rgba(118, 75, 162, 0.1)',
+                        borderColor: '#2ca02c',
+                        backgroundColor: 'rgba(44,160,44,0.08)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 4
+                    },
+                    {
+                        label: '30d WMA',
+                        data: [],
+                        borderColor: '#ff7f0e',
+                        backgroundColor: 'rgba(255,127,14,0.06)',
                         borderWidth: 2,
                         tension: 0.4,
                         pointRadius: 0,
@@ -312,30 +322,41 @@
         // Load initial data
         async function loadPrices() {
             try {
-                const response = await fetch('/api/prices?days=1');
+                // Request last 30 days so the 7d/30d WMAs can be computed and returned
+                const response = await fetch('/api/prices?days=30');
                 const data = await response.json();
                 
                 if (data.prices && data.prices.length > 0) {
                     const labels = data.prices.map(p => {
                         const date = new Date(p.timestamp);
-                        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                     });
                     const prices = data.prices.map(p => p.price);
-                    const movingAvg = data.movingAvg || [];
+                    const wma7 = data.wma7 || [];
+                    const wma30 = data.wma30 || [];
                     
                     chart.data.labels = labels;
                     chart.data.datasets[0].data = prices;
-                    chart.data.datasets[1].data = movingAvg;
+                    chart.data.datasets[1].data = wma7;
+                    chart.data.datasets[2].data = wma30;
                     chart.update('none');
                     
-                    // Update stats
+                    // Update stats (use last available values)
                     const currentPrice = prices[prices.length - 1];
-                    const avgPrice = movingAvg[movingAvg.length - 1];
-                    const change = ((currentPrice - avgPrice) / avgPrice * 100).toFixed(2);
+                    const lastWma7 = wma7.length > 0 ? wma7[wma7.length - 1] : null;
+                    const lastWma30 = wma30.length > 0 ? wma30[wma30.length - 1] : null;
                     
                     document.getElementById('currentPrice').textContent = '$' + currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    document.getElementById('movingAvg').textContent = '$' + avgPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    document.getElementById('change').textContent = (change >= 0 ? '+' : '') + change + '%';
+                    if (lastWma7 !== null) {
+                        document.getElementById('wma7').textContent = '$' + lastWma7.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    } else {
+                        document.getElementById('wma7').textContent = '--';
+                    }
+                    if (lastWma30 !== null) {
+                        document.getElementById('wma30').textContent = '$' + lastWma30.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    } else {
+                        document.getElementById('wma30').textContent = '--';
+                    }
                     
                     lastTimestamp = data.prices[data.prices.length - 1].timestamp;
                     document.getElementById('lastUpdate').textContent = 'Last update: ' + new Date(lastTimestamp).toLocaleString();
