@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crypto Trader</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.1.0/dist/chartjs-plugin-annotation.js"></script>
     <style>
         * {
             margin: 0;
@@ -86,6 +87,31 @@
             color: #999;
             font-size: 0.9em;
             margin-top: 10px;
+        }
+        .signal-legend {
+            text-align: center;
+            margin: 15px 0;
+            font-size: 0.9em;
+        }
+        .signal-legend span {
+            margin: 0 15px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .signal-marker {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .buy-marker {
+            background: #00c800;
+            box-shadow: 0 0 8px rgba(0, 200, 0, 0.8);
+        }
+        .sell-marker {
+            background: #ff0000;
+            box-shadow: 0 0 8px rgba(255, 0, 0, 0.8);
         }
         .settings-section {
             background: #f8f9fa;
@@ -212,6 +238,11 @@
             </div>
         </div>
         
+        <div class="signal-legend">
+            <span><div class="signal-marker buy-marker"></div><strong>Buy Signal</strong></span>
+            <span><div class="signal-marker sell-marker"></div><strong>Sell Signal</strong></span>
+        </div>
+        
         <div class="chart-container">
             <canvas id="priceChart"></canvas>
         </div>
@@ -278,6 +309,30 @@
                         tension: 0.4,
                         pointRadius: 0,
                         pointHoverRadius: 4
+                    },
+                    {
+                        label: 'Buy Signal',
+                        type: 'scatter',
+                        data: [],
+                        borderColor: '#00c800',
+                        backgroundColor: '#00c800',
+                        pointRadius: 12,
+                        pointHoverRadius: 15,
+                        showLine: false,
+                        borderWidth: 2,
+                        borderColor: '#008000'
+                    },
+                    {
+                        label: 'Sell Signal',
+                        type: 'scatter',
+                        data: [],
+                        borderColor: '#ff0000',
+                        backgroundColor: '#ff0000',
+                        pointRadius: 12,
+                        pointHoverRadius: 15,
+                        showLine: false,
+                        borderWidth: 2,
+                        borderColor: '#cc0000'
                     }
                 ]
             },
@@ -296,6 +351,9 @@
                     tooltip: {
                         callbacks: {
                             label: function(context) {
+                                if (context.dataset.label.includes('Signal')) {
+                                    return context.dataset.label + ' at $' + context.parsed.y.toFixed(2);
+                                }
                                 return context.dataset.label + ': $' + context.parsed.y.toFixed(2);
                             }
                         }
@@ -322,12 +380,11 @@
         // Load initial data
         async function loadPrices() {
             try {
-                // Request last 30 days so the 7d/30d WMAs can be computed and returned
                 const response = await fetch('/api/prices?days=30');
                 const data = await response.json();
                 
                 if (data.prices && data.prices.length > 0) {
-                    const labels = data.prices.map(p => {
+                    const labels = data.prices.map((p, idx) => {
                         const date = new Date(p.timestamp);
                         return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                     });
@@ -335,13 +392,36 @@
                     const wma7 = data.wma7 || [];
                     const wma30 = data.wma30 || [];
                     
+                    // Build signal data arrays using label indices
+                    const buySignalData = [];
+                    const sellSignalData = [];
+                    
+                    if (data.signals && data.signals.length > 0) {
+                        data.signals.forEach(signal => {
+                            if (signal.index >= 0 && signal.index < prices.length) {
+                                const signalPoint = {
+                                    x: signal.index,
+                                    y: signal.price
+                                };
+                                
+                                if (signal.action === 'BUY') {
+                                    buySignalData.push(signalPoint);
+                                } else if (signal.action === 'SELL') {
+                                    sellSignalData.push(signalPoint);
+                                }
+                            }
+                        });
+                    }
+                    
                     chart.data.labels = labels;
                     chart.data.datasets[0].data = prices;
                     chart.data.datasets[1].data = wma7;
                     chart.data.datasets[2].data = wma30;
+                    chart.data.datasets[3].data = buySignalData;
+                    chart.data.datasets[4].data = sellSignalData;
                     chart.update('none');
                     
-                    // Update stats (use last available values)
+                    // Update stats
                     const currentPrice = prices[prices.length - 1];
                     const lastWma7 = wma7.length > 0 ? wma7[wma7.length - 1] : null;
                     const lastWma30 = wma30.length > 0 ? wma30[wma30.length - 1] : null;
@@ -374,7 +454,6 @@
                 const data = await response.json();
                 
                 if (data.timestamp && data.timestamp !== lastTimestamp) {
-                    // New data available, reload all prices
                     await loadPrices();
                 }
             } catch (error) {
@@ -438,7 +517,6 @@
                     messageDiv.className = 'message error';
                 }
                 
-                // Hide message after 3 seconds
                 setTimeout(() => {
                     messageDiv.style.display = 'none';
                 }, 3000);

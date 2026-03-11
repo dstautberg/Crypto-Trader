@@ -59,6 +59,19 @@ func consoleMode() {
 		panic(err)
 	}
 
+	// Create trading signals table
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS trading_signals (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		price_id INTEGER,
+		action TEXT,
+		price REAL,
+		timestamp DATETIME,
+		FOREIGN KEY(price_id) REFERENCES btc_price(id)
+	)`)
+	if err != nil {
+		panic(err)
+	}
+
 	runPriceCollection(db, true)
 }
 
@@ -99,10 +112,12 @@ func runPriceCollection(db *sql.DB, showConsoleOutput bool) {
 		}
 		// price = 116438.805 // Uncomment this line to test with a fixed price
 
-		_, err = db.Exec(`INSERT INTO btc_price (price, timestamp) VALUES (?, ?)`, price, time.Now().UTC())
+		result, err := db.Exec(`INSERT INTO btc_price (price, timestamp) VALUES (?, ?)`, price, time.Now().UTC())
 		if err != nil {
 			panic(err)
 		}
+
+		priceID, _ := result.LastInsertId()
 
 		// Call the trading algorithm to analyze the price
 		signal, err := TradingAlgorithm(db, price, movingAvgDays, changeThreshold)
@@ -110,6 +125,15 @@ func runPriceCollection(db *sql.DB, showConsoleOutput bool) {
 			fmt.Println("Error running trading algorithm:", err)
 			time.Sleep(time.Duration(sleepSeconds) * time.Second)
 			continue
+		}
+
+		// Record trading signal if action is BUY or SELL
+		if signal.Action == "BUY" || signal.Action == "SELL" {
+			_, err := db.Exec(`INSERT INTO trading_signals (price_id, action, price, timestamp) VALUES (?, ?, ?, ?)`,
+				priceID, signal.Action, price, time.Now().UTC())
+			if err != nil {
+				fmt.Println("Error recording trading signal:", err)
+			}
 		}
 
 		// Get current time for output in Eastern Time
@@ -161,27 +185,12 @@ func runPriceCollection(db *sql.DB, showConsoleOutput bool) {
 			}
 			p.Println(strings.Repeat(line, 105))
 
-			// Common Unicode circle types:
-			// Small Circle:      ◦ (U+25E6)  \u25E6
-			// Medium Circle:     ○ (U+25CB)  \u25CB
-			// Large Circle:      ● (U+25CF)  \u25CF
-			// White Circle:      ◯ (U+25EF)  \u25EF
-			// Black Circle:      ● (U+25CF)  \u25CF
-			// Dotted Circle:     ◌ (U+25CC)  \u25CC
-			// Bullseye/Fisheye:  ◉ (U+25C9)  \u25C9
-			// Circle Vert Fill:  ◍ (U+25CD)  \u25CD
-			// "Bullet" • (U+2022) — a small filled circle, commonly used for lists.
-			// "Black Small Circle" ● (U+25CF) — but this is the same as the large filled circle.
-			// "One Dot Leader" ․ (U+2024) — very small, but not visually circular in all fonts.
-			// "Middle Dot" · (U+00B7) — a small centered dot, but not a perfect circle.
-			// You can use these as needed for chart points.
 			circle := "\u2022"
 			fmt.Printf("Price: \x1b[37m%s\x1b[0m %dd MA: \x1b[32m%s\x1b[0m Both: \x1b[33m%s\x1b[0m",
 				circle, movingAvgDays, circle, circle,
 			)
 
 			// Inline chart display after price output
-			// Query prices and timestamps for the last N days (matching moving average)
 			queryChart := fmt.Sprintf(`SELECT price, timestamp FROM btc_price WHERE timestamp >= datetime('now', '-%d day') ORDER BY timestamp`, movingAvgDays)
 			rows, err := db.Query(queryChart)
 			if err == nil {
@@ -342,6 +351,19 @@ func webServer() {
 		panic(err)
 	}
 
+	// Create trading signals table
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS trading_signals (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		price_id INTEGER,
+		action TEXT,
+		price REAL,
+		timestamp DATETIME,
+		FOREIGN KEY(price_id) REFERENCES btc_price(id)
+	)`)
+	if err != nil {
+		panic(err)
+	}
+
 	// Start price collection in background
 	go runPriceCollection(db, false)
 
@@ -377,6 +399,12 @@ func webServer() {
 			Timestamp string  `json:"timestamp"`
 		}
 
+		type Signal struct {
+			Index  int    `json:"index"`
+			Action string `json:"action"`
+			Price  float64 `json:"price"`
+		}
+
 		var prices []PricePoint
 		var rawPrices []float64
 		for rows.Next() {
@@ -384,6 +412,33 @@ func webServer() {
 			if err := rows.Scan(&p.Price, &p.Timestamp); err == nil {
 				prices = append(prices, p)
 				rawPrices = append(rawPrices, p.Price)
+			}
+		}
+
+		// Fetch trading signals for the same time range
+		signalQuery := fmt.Sprintf(`SELECT ts.action, ts.price, ts.timestamp FROM trading_signals ts 
+			WHERE ts.timestamp >= datetime('now', '-%d day') ORDER BY ts.timestamp`, daysInt)
+		signalRows, err := db.Query(signalQuery)
+		var signals []Signal
+		if err == nil {
+			defer signalRows.Close()
+			for signalRows.Next() {
+				var action string
+				var price float64
+				var timestamp string
+				if err := signalRows.Scan(&action, &price, &timestamp); err == nil {
+					// Find matching index in prices array
+					for i, p := range prices {
+						if p.Timestamp == timestamp {
+							signals = append(signals, Signal{
+								Index:  i,
+								Action: action,
+								Price:  price,
+							})
+							break
+						}
+					}
+				}
 			}
 		}
 
@@ -423,9 +478,10 @@ func webServer() {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"prices":    prices,
-			"wma7":      wma7,
-			"wma30":     wma30,
+			"prices":   prices,
+			"wma7":     wma7,
+			"wma30":    wma30,
+			"signals":  signals,
 		})
 	})
 

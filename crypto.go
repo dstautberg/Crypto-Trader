@@ -26,7 +26,7 @@ func getBTCPrice(ticker string) (float64, error) {
 	if val, ok := tickerMap[ticker]; ok {
 		krakenTicker = val
 	}
-	url := fmt.Sprintf("https://api.kraken.com/0/public/Ticker?pair=X%sZUSD", krakenTicker)
+	url := fmt.Sprintf("https://api.kraken.com/0/public/Ticker?pair=X%sZUST", krakenTicker)
 	resp, err := http.Get(url)
 	if err != nil {
 		return 0, err

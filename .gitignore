@@ -34,3 +34,5 @@ Thumbs.db
 *.db-wal
 tmp/build-errors.log
 /.vs
+/gala_trade_log.csv
+/trade_log.csv
