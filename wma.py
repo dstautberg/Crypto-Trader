@@ -26,8 +26,9 @@ def calculate_kraken_wma(symbol='BTC/USD', timeframe='1h', period=14):
         print(f"Error fetching data from Kraken: {e}")
         return None, None
 
-# Run the calculation
-price, wma = calculate_kraken_wma()
-if price:
-    print(f"BTC/USD Price: ${price:,.2f} | 14-period WMA: ${wma:,.2f}")
-    print("Trend: " + ("Bullish" if price > wma else "Bearish"))
+if __name__ == "__main__":
+    # Run the calculation
+    price, wma = calculate_kraken_wma()
+    if price:
+        print(f"BTC/USD Price: ${price:,.2f} | 14-period WMA: ${wma:,.2f}")
+        print("Trend: " + ("Bullish" if price > wma else "Bearish"))

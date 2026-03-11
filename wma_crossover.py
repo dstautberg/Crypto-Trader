@@ -27,6 +27,7 @@ def get_crossover_signal(symbol='BTC/USD', fast_p=7, slow_p=30):
 
     return current_price, fast_wma, slow_wma, signal
 
-price, fast, slow, signal = get_crossover_signal()
-print(f"Price: ${price:,.2f} | Fast WMA: {fast:.2f} | Slow WMA: {slow:.2f}")
-print(f"Signal: {signal}")
+if __name__ == "__main__":
+    price, fast, slow, signal = get_crossover_signal()
+    print(f"Price: ${price:,.2f} | Fast WMA: {fast:.2f} | Slow WMA: {slow:.2f}")
+    print(f"Signal: {signal}")
