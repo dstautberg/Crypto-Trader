@@ -17,6 +17,8 @@ class CryptoSim:
         self.fee_rate = 0.001  # 0.1% exchange fee
         self.ticker = ticker.upper()
         self.log_file = f"{self.ticker.lower()}_trade_log.csv"
+        self.price_history = []  # Track prices and trades
+        self.sold_tiers = set()  # Track which gain tiers have been sold
         self._init_csv()
 
     def _init_csv(self):
@@ -60,7 +62,9 @@ class CryptoSim:
         self.holdings += quantity
         self.cash = 0.0
         self.entry_price = price
+        self.sold_tiers = set()  # Reset tiers for new position
         self.log_event("BUY", price, quantity)
+        self.price_history.append({"price": price, "action": "BUY"})
         print(f"✓ Bought {quantity:.8f} {self.ticker} at ${price:.5f}")
 
     def sell_ladder(self, price):
@@ -68,20 +72,16 @@ class CryptoSim:
         if price <= 0:
             raise ValueError("Price must be positive")
         if self.holdings <= 0:
-            print(f"✗ No {self.ticker} holdings to sell")
             return
 
         price_gain_percent = ((price - self.entry_price) / self.entry_price) * 100
-        
-        # Sell 25% at +5%, +10%, +15%, +20% gains
-        if price_gain_percent >= 5.0:
-            self.sell_partial(price, 0.25)
-        elif price_gain_percent >= 10.0:
-            self.sell_partial(price, 0.25)
-        elif price_gain_percent >= 15.0:
-            self.sell_partial(price, 0.25)
-        elif price_gain_percent >= 20.0:
-            self.sell_partial(price, 0.25)
+
+        # Check tiers ascending - trigger the lowest unmet tier and wait for next iteration
+        for tier in [5, 10, 15, 20]:
+            if price_gain_percent >= tier and tier not in self.sold_tiers:
+                self.sell_partial(price, 0.25)
+                self.sold_tiers.add(tier)
+                break  # One tier per iteration
 
     def sell_partial(self, price, percent):
         """Sell a percentage of holdings at current price."""
@@ -90,7 +90,6 @@ class CryptoSim:
         if not 0 < percent <= 1:
             raise ValueError("Percent must be between 0 and 1")
         if self.holdings <= 0:
-            print(f"✗ No {self.ticker} holdings to sell")
             return
 
         quantity = self.holdings * percent
@@ -98,10 +97,11 @@ class CryptoSim:
         self.cash += revenue
         self.holdings -= quantity
         self.log_event(f"SELL_{int(percent * 100)}%", price, quantity)
+        self.price_history.append({"price": price, "action": "SELL"})
         print(f"✓ Sold {quantity:.8f} {self.ticker} at ${price:.5f} for ${revenue:.2f}")
 
     def get_status(self, current_price):
-        """Print current portfolio status."""
+        """Print current portfolio status with price chart."""
         portfolio_value = self._get_portfolio_value(current_price)
         profit_loss = portfolio_value - self.initial_cash
         profit_percent = (profit_loss / self.initial_cash * 100) if self.initial_cash > 0 else 0
@@ -110,7 +110,59 @@ class CryptoSim:
         print(f"   Cash: ${self.cash:.2f}")
         print(f"   {self.ticker} Holdings: {self.holdings:.8f}")
         print(f"   Portfolio Value: ${portfolio_value:.2f}")
-        print(f"   Profit/Loss: ${profit_loss:.2f} ({profit_percent:+.2f}%)\n")
+        print(f"   Profit/Loss: ${profit_loss:.2f} ({profit_percent:+.2f}%)")
+        
+        # Print mini price chart
+        self._print_price_chart(current_price)
+        print()
+
+    def _print_price_chart(self, current_price):
+        """Print a simple text-based price chart with buy/sell markers."""
+        if len(self.price_history) < 2:
+            return
+
+        # Keep last 20 prices for chart
+        recent_history = self.price_history[-20:]
+        
+        if len(recent_history) < 2:
+            return
+
+        prices = [p["price"] for p in recent_history]
+        actions = [p["action"] for p in recent_history]
+        
+        min_price = min(prices)
+        max_price = max(prices)
+        price_range = max_price - min_price
+        
+        if price_range == 0:
+            return
+
+        print(f"   📈 Price Chart (last {len(recent_history)} updates):")
+        
+        # Normalize prices to 0-9 scale
+        chart_height = 10
+        for level in range(chart_height - 1, -1, -1):
+            level_price = min_price + (price_range / chart_height) * (level + 1)
+            line = f"   {level_price:8.5f} │ "
+            
+            for i, price in enumerate(prices):
+                normalized = (price - min_price) / price_range
+                price_level = int(normalized * (chart_height - 1))
+                
+                if price_level == level:
+                    if actions[i] == "BUY":
+                        line += "↑ "  # Up arrow for buy
+                    elif actions[i] == "SELL":
+                        line += "↓ "  # Down arrow for sell
+                    else:
+                        line += "● "  # Dot for price-only
+                else:
+                    line += "  "
+            
+            print(line)
+        
+        # Bottom axis
+        print(f"   {min_price:8.5f} └" + "─" * (len(prices) * 2))
 
 
 def get_crypto_price(ticker):
@@ -161,7 +213,7 @@ def print_available_tickers():
 def simulate_trading_loop(initial_cash=100.0, ticker="GALA", interval=60):
     """
     Run a simulated trading loop with real cryptocurrency prices from Kraken (USD pairs).
-    Uses a laddered exit strategy.
+    Uses a laddered exit strategy with visual price chart.
     
     Args:
         initial_cash: Starting portfolio value in USD
@@ -175,6 +227,7 @@ def simulate_trading_loop(initial_cash=100.0, ticker="GALA", interval=60):
     print(f"🚀 Starting {ticker} trading simulation with ${initial_cash} USD")
     print(f"📊 Using Kraken API for real-time prices (USD pairs)")
     print(f"📈 Strategy: Laddered exit (sell 25% at +5%, +10%, +15%, +20% gains)")
+    print(f"Chart: ↑ = BUY, ↓ = SELL, ● = price only")
     print(f"Press Ctrl+C to stop\n")
 
     try:
@@ -202,6 +255,9 @@ def simulate_trading_loop(initial_cash=100.0, ticker="GALA", interval=60):
                 # Sell ladder based on gains from entry price
                 if sim.holdings > 0:
                     sim.sell_ladder(price)
+                else:
+                    # Track price movement if no holdings
+                    sim.price_history.append({"price": price, "action": None})
 
             sim.get_status(price)
             prev_price = price
