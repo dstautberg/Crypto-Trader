@@ -63,6 +63,26 @@ class CryptoSim:
         self.log_event("BUY", price, quantity)
         print(f"✓ Bought {quantity:.8f} {self.ticker} at ${price:.5f}")
 
+    def sell_ladder(self, price):
+        """Execute ladder sell strategy: sell 25% at each price level."""
+        if price <= 0:
+            raise ValueError("Price must be positive")
+        if self.holdings <= 0:
+            print(f"✗ No {self.ticker} holdings to sell")
+            return
+
+        price_gain_percent = ((price - self.entry_price) / self.entry_price) * 100
+        
+        # Sell 25% at +5%, +10%, +15%, +20% gains
+        if price_gain_percent >= 5.0:
+            self.sell_partial(price, 0.25)
+        elif price_gain_percent >= 10.0:
+            self.sell_partial(price, 0.25)
+        elif price_gain_percent >= 15.0:
+            self.sell_partial(price, 0.25)
+        elif price_gain_percent >= 20.0:
+            self.sell_partial(price, 0.25)
+
     def sell_partial(self, price, percent):
         """Sell a percentage of holdings at current price."""
         if price <= 0:
@@ -141,6 +161,7 @@ def print_available_tickers():
 def simulate_trading_loop(initial_cash=100.0, ticker="GALA", interval=60):
     """
     Run a simulated trading loop with real cryptocurrency prices from Kraken (USD pairs).
+    Uses a laddered exit strategy.
     
     Args:
         initial_cash: Starting portfolio value in USD
@@ -153,6 +174,7 @@ def simulate_trading_loop(initial_cash=100.0, ticker="GALA", interval=60):
 
     print(f"🚀 Starting {ticker} trading simulation with ${initial_cash} USD")
     print(f"📊 Using Kraken API for real-time prices (USD pairs)")
+    print(f"📈 Strategy: Laddered exit (sell 25% at +5%, +10%, +15%, +20% gains)")
     print(f"Press Ctrl+C to stop\n")
 
     try:
@@ -167,19 +189,19 @@ def simulate_trading_loop(initial_cash=100.0, ticker="GALA", interval=60):
 
             print(f"[Iteration {iteration + 1}] Current {ticker} Price: ${price:.5f}")
 
-            # Simple trading logic based on price movements
+            # Laddered exit strategy
             if iteration == 0:
                 sim.buy(price)
             elif prev_price is not None:
                 price_change = ((price - prev_price) / prev_price) * 100
                 
-                # Sell if price rises >2%
-                if price_change > 2.0 and sim.holdings > 0:
-                    sim.sell_partial(price, 0.5)
-                
                 # Buy if price drops >2%
                 if price_change < -2.0 and sim.cash > 0:
                     sim.buy(price)
+                
+                # Sell ladder based on gains from entry price
+                if sim.holdings > 0:
+                    sim.sell_ladder(price)
 
             sim.get_status(price)
             prev_price = price
