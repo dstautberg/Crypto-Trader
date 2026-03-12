@@ -34,14 +34,13 @@ class CryptoSim:
         self._init_csv()
 
     def _init_csv(self):
-        """Create CSV file with headers if it doesn't exist."""
-        if not os.path.exists(self.log_file):
-            with open(self.log_file, 'w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow([
-                    "Timestamp", "Action", "Price", "Quantity",
-                    "Cash", "Holdings", "Portfolio_Value"
-                ])
+        """Create CSV file with headers. Start new file each time."""
+        with open(self.log_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "Timestamp", "Action", "Price", "Quantity",
+                "Cash", "Holdings", "Portfolio_Value"
+            ])
 
     def _get_portfolio_value(self, current_price):
         """Calculate total portfolio value at current price."""
@@ -130,24 +129,27 @@ class CryptoSim:
 
     def _print_price_chart(self, current_price):
         """Print a simple text-based price chart with buy/sell markers."""
-        if len(self.price_history) < 2:
-            return
+        # if len(self.price_history) < 2:
+        #     return
 
         # Keep last 20 prices for chart
         recent_history = self.price_history[-20:]
 
-        if len(recent_history) < 2:
-            return
+        # if len(recent_history) < 2:
+        #     return
 
         prices = [p["price"] for p in recent_history]
         actions = [p["action"] for p in recent_history]
 
         min_price = min(prices)
         max_price = max(prices)
+        if min_price == max_price:
+            min_price *= 0.99
+            max_price *= 1.01
         price_range = max_price - min_price
 
-        if price_range == 0:
-            return
+        # if price_range == 0:
+        #     return
 
         print(f"   {ICON_CHART_UP} Price Chart (last {len(recent_history)} updates):")
 
