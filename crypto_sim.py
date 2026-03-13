@@ -17,6 +17,10 @@ ICON_UP_ARROW   = "\u2191"      # ↑
 ICON_DOWN_ARROW = "\u2193"      # ↓
 ICON_DOT        = "\u25CF"      # ●
 
+# Text formatting
+TEXT_GREEN = '\033[32m'
+TEXT_BOLD = '\033[1m'
+TEXT_NORMAL = '\033[0m'
 
 class CryptoSim:
     """Simulates cryptocurrency trading with virtual portfolio tracking."""
@@ -120,7 +124,7 @@ class CryptoSim:
         print(f"\n{ICON_CHART_BAR} Portfolio Status ({self.ticker}):")
         print(f"   Cash: ${self.cash:.2f}")
         print(f"   {self.ticker} Holdings: {self.holdings:.8f}")
-        print(f"   Portfolio Value: ${portfolio_value:.2f}")
+        print(f"   {TEXT_GREEN}Portfolio Value: ${portfolio_value:.2f}{TEXT_NORMAL}")
         print(f"   Profit/Loss: ${profit_loss:.2f} ({profit_percent:+.2f}%)")
 
         # Print mini price chart
