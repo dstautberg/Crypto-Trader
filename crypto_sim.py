@@ -258,7 +258,7 @@ def simulate_trading_loop(initial_cash=100.0, ticker="GALA", interval=60):
                 time.sleep(60)
                 continue
 
-            print(f"[Iteration {iteration + 1}] Current {ticker} Price: ${price:.5f}")
+            print(f"[{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}] Current {ticker} Price: ${price:.5f}")
 
             # Laddered exit strategy
             if iteration == 0:
