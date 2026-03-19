@@ -32,7 +32,7 @@ class CryptoSim:
         self.entry_price = 0.0
         self.fee_rate = 0.001  # 0.1% exchange fee
         self.ticker = ticker.upper()
-        self.log_file = f"{self.ticker.lower()}_trade_log.csv"
+        self.log_file = f"crypto_sym_{self.ticker.lower()}.log"
         self.price_history = []  # Track prices and trades
         self.sold_tiers = set()  # Track which gain tiers have been sold
         self._init_csv()
@@ -126,6 +126,7 @@ class CryptoSim:
         print(f"   {self.ticker} Holdings: {self.holdings:.8f}")
         print(f"   {TEXT_GREEN}Portfolio Value: ${portfolio_value:.2f}{TEXT_NORMAL}")
         print(f"   Profit/Loss: ${profit_loss:.2f} ({profit_percent:+.2f}%)")
+        # TODO: Display profit/loss percent APR and time held in days.
 
         # Print mini price chart
         self._print_price_chart(current_price)
