@@ -104,9 +104,9 @@ func runPriceCollection(db *sql.DB, showConsoleOutput bool) {
 	}
 
 	for {
-		price, err := getBTCPrice(ticker)
+		price, usedURL, err := getBTCPrice(ticker)
 		if err != nil {
-			fmt.Println("Error fetching price:", err)
+			fmt.Println("Error fetching price:", err, "url:", usedURL)
 			time.Sleep(time.Duration(sleepSeconds) * time.Second)
 			continue
 		}
