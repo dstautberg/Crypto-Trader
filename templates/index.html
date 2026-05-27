@@ -312,7 +312,7 @@
                     },
                     {
                         label: 'Buy Signal',
-                        type: 'scatter',
+                        type: 'line',
                         data: [],
                         borderColor: '#00c800',
                         backgroundColor: '#00c800',
@@ -320,11 +320,12 @@
                         pointHoverRadius: 15,
                         showLine: false,
                         borderWidth: 2,
-                        borderColor: '#008000'
+                        borderColor: '#008000',
+                        spanGaps: true
                     },
                     {
                         label: 'Sell Signal',
-                        type: 'scatter',
+                        type: 'line',
                         data: [],
                         borderColor: '#ff0000',
                         backgroundColor: '#ff0000',
@@ -332,7 +333,8 @@
                         pointHoverRadius: 15,
                         showLine: false,
                         borderWidth: 2,
-                        borderColor: '#cc0000'
+                        borderColor: '#cc0000',
+                        spanGaps: true
                     }
                 ]
             },
@@ -392,22 +394,17 @@
                     const wma7 = data.wma7 || [];
                     const wma30 = data.wma30 || [];
                     
-                    // Build signal data arrays using label indices
-                    const buySignalData = [];
-                    const sellSignalData = [];
-                    
+                    // Build signal data arrays aligned with price labels (nulls except at signal indices)
+                    const buySignalData = new Array(prices.length).fill(null);
+                    const sellSignalData = new Array(prices.length).fill(null);
+
                     if (data.signals && data.signals.length > 0) {
                         data.signals.forEach(signal => {
                             if (signal.index >= 0 && signal.index < prices.length) {
-                                const signalPoint = {
-                                    x: signal.index,
-                                    y: signal.price
-                                };
-                                
                                 if (signal.action === 'BUY') {
-                                    buySignalData.push(signalPoint);
+                                    buySignalData[signal.index] = signal.price;
                                 } else if (signal.action === 'SELL') {
-                                    sellSignalData.push(signalPoint);
+                                    sellSignalData[signal.index] = signal.price;
                                 }
                             }
                         });

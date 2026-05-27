@@ -306,7 +306,7 @@ func computeWMA(prices []float64, window int) []float64 {
 		}
 		var weightedSum, sumWeights float64
 		for j := start; j <= i; j++ {
-			weight := float64(j-start+1)
+			weight := float64(j - start + 1)
 			weightedSum += prices[j] * weight
 			sumWeights += weight
 		}
@@ -386,7 +386,7 @@ func webServer() {
 			daysInt = 1
 		}
 
-		query := fmt.Sprintf(`SELECT price, timestamp FROM btc_price WHERE timestamp >= datetime('now', '-%d day') ORDER BY timestamp`, daysInt)
+		query := fmt.Sprintf(`SELECT id, price, timestamp FROM btc_price WHERE timestamp >= datetime('now', '-%d day') ORDER BY timestamp`, daysInt)
 		rows, err := db.Query(query)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -395,13 +395,14 @@ func webServer() {
 		defer rows.Close()
 
 		type PricePoint struct {
+			ID        int     `json:"id"`
 			Price     float64 `json:"price"`
 			Timestamp string  `json:"timestamp"`
 		}
 
 		type Signal struct {
-			Index  int    `json:"index"`
-			Action string `json:"action"`
+			Index  int     `json:"index"`
+			Action string  `json:"action"`
 			Price  float64 `json:"price"`
 		}
 
@@ -409,14 +410,14 @@ func webServer() {
 		var rawPrices []float64
 		for rows.Next() {
 			var p PricePoint
-			if err := rows.Scan(&p.Price, &p.Timestamp); err == nil {
+			if err := rows.Scan(&p.ID, &p.Price, &p.Timestamp); err == nil {
 				prices = append(prices, p)
 				rawPrices = append(rawPrices, p.Price)
 			}
 		}
 
 		// Fetch trading signals for the same time range
-		signalQuery := fmt.Sprintf(`SELECT ts.action, ts.price, ts.timestamp FROM trading_signals ts 
+		signalQuery := fmt.Sprintf(`SELECT ts.action, ts.price, ts.price_id FROM trading_signals ts 
 			WHERE ts.timestamp >= datetime('now', '-%d day') ORDER BY ts.timestamp`, daysInt)
 		signalRows, err := db.Query(signalQuery)
 		var signals []Signal
@@ -425,11 +426,11 @@ func webServer() {
 			for signalRows.Next() {
 				var action string
 				var price float64
-				var timestamp string
-				if err := signalRows.Scan(&action, &price, &timestamp); err == nil {
-					// Find matching index in prices array
+				var priceID int
+				if err := signalRows.Scan(&action, &price, &priceID); err == nil {
+					// Find matching index in prices array by price ID
 					for i, p := range prices {
-						if p.Timestamp == timestamp {
+						if p.ID == priceID {
 							signals = append(signals, Signal{
 								Index:  i,
 								Action: action,
@@ -478,10 +479,10 @@ func webServer() {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"prices":   prices,
-			"wma7":     wma7,
-			"wma30":    wma30,
-			"signals":  signals,
+			"prices":  prices,
+			"wma7":    wma7,
+			"wma30":   wma30,
+			"signals": signals,
 		})
 	})
 
